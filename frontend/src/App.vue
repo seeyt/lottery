@@ -2,14 +2,26 @@
 <template>
     <div class="app-container">
         <div class="header" ref="header">
-            <div class="file">
-                <div class="file-path"  @click="selectFile">
-                    <div class="file-name">{{filePath || "点击选择文件"}}</div>
-                </div>
+            <el-form>
+            <div style="display: flex;">
+                <el-form-item label="抽奖名单" style="flex: 1;margin-left: 10rpx;">
+                    <div class="file">
+                        <div class="file-path"  @click="selectFile">
+                            <div class="file-name">{{ filePath || "点击选择抽奖名单" }}</div>
+                        </div>
+                    </div>
+                </el-form-item>
+                <el-form-item label="抽取人数" label-width="80px" >
+                    <el-input-number  placeholder="抽奖人数" 
+                    @change="numberChange"
+                    :min="1" :controls="false" size="small" v-model="num" style="width: 100px; margin-left: 10rpx;"></el-input-number> 
+                </el-form-item>
             </div>
+        </el-form>
             <div class="buttons">
-                <el-button @click="analyse" type="primary"  v-if="filePath">{{tableData.length === 0 ? "抽取" : "重新抽取"}}</el-button>
+                <el-button @click="lottery" type="primary"  v-if="filePath">{{tableData.length === 0 ? "抽取" : "重新抽取"}}</el-button>
                 <el-button @click="clean"  v-if="filePath">清空</el-button>
+                <el-button @click="save">导出获奖名单</el-button>
             </div>
         </div>
         <div class="table" :style="`height: ${tableHeight}px`">
@@ -31,7 +43,7 @@
     </div>
 </template>
 <script setup>
-import {Analyse, CleanFile, SelectFile, CleanCache} from "../wailsjs/go/main/App";
+import {Analyse, CleanFile, SelectFile, CleanCache, Lottery, GetNum, SetNum, SaveAs} from "../wailsjs/go/main/App";
 import _ from 'lodash'
 import {computed, onMounted, ref} from "vue";
 import {ElLoading, ElMessage} from 'element-plus'
@@ -42,11 +54,14 @@ let header = ref();
 let tableHeight = ref(0);
 let page = ref(1);
 let size = ref(10);
+let num = ref(0);
 let tableData = ref([]);
 
-onMounted(() => {
+onMounted(async () => {
     computeHeight()
-    window.addEventListener('resize',_.throttle(computeHeight,1000));
+    window.addEventListener('resize', _.throttle(computeHeight, 1000));
+    num.value = await GetNum()
+   
 })
 const list  = computed(() => {
     return  tableData.value.slice((page.value-1)*size.value,page.value * size.value)
@@ -63,19 +78,47 @@ const selectFile = async  () => {
     try {
         filePath.value = await SelectFile()
         await cleanCache()
+        analyse()
     } catch (e) {
         ElMessage.error(e)
     }
 
 }
+
+const save = async () => {
+    try {
+        await SaveAs()
+    } catch (e) {
+        ElMessage.error(e)
+    }
+
+}
+
+
 const analyse = async  () => {
+    try {
+        await Analyse()
+    } catch (e) {
+        ElMessage.error(e)
+    }
+}
+
+const numberChange = async () => {
+    try {
+        await SetNum(num.value)
+    } catch (e) {
+        ElMessage.error(e)
+    }
+}
+
+const lottery = async () => {
     const loading = ElLoading.service({
         lock: true,
         text: '抽取中',
         background: 'rgba(0, 0, 0, 0.7)',
     })
     try {
-        let res = await Analyse()
+        let res = await Lottery()
         tableData.value = res.Data;
         loading.close();
     } catch (e) {
@@ -83,6 +126,7 @@ const analyse = async  () => {
         loading.close()
     }
 }
+
 
 
 const cleanCache = async() => {
@@ -113,7 +157,7 @@ const clean = async() => {
     padding: 10px 10px 0;
     box-sizing: border-box;
     flex-direction: column;
-    height: 84px;
+    height: 120px;
 }
 .header .buttons {
     display: flex;
@@ -122,7 +166,7 @@ const clean = async() => {
 .file {
     display: flex;
     align-items: center;
-    margin-bottom: 10px;
+    flex: 1;
 }
 .file .label {
     margin-right: 10px;

@@ -14,6 +14,22 @@ export function CleanFile() {
   return window['go']['main']['App']['CleanFile']();
 }
 
+export function GetNum() {
+  return window['go']['main']['App']['GetNum']();
+}
+
+export function Lottery() {
+  return window['go']['main']['App']['Lottery']();
+}
+
+export function SaveAs() {
+  return window['go']['main']['App']['SaveAs']();
+}
+
 export function SelectFile() {
   return window['go']['main']['App']['SelectFile']();
+}
+
+export function SetNum(arg1) {
+  return window['go']['main']['App']['SetNum'](arg1);
 }

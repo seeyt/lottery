@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-	"github.com/xuri/excelize/v2"
 	"math/rand"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/xuri/excelize/v2"
 )
 
 type Result struct {
@@ -16,14 +17,27 @@ type Result struct {
 
 // App struct
 type App struct {
-	ctx      context.Context
-	filePath string
-	results  []Item
+	ctx        context.Context
+	filePath   string
+	results    []Item
+	cache      []Item
+	originData []Item
+	num        int
+}
+
+func (a *App) GetNum() int {
+	return a.num
+}
+
+func (a *App) SetNum(v int) {
+	a.num = v
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	return &App{}
+	return &App{
+		num: 10,
+	}
 }
 
 // startup is called when the app starts. The context is saved
@@ -42,7 +56,7 @@ func (a *App) SelectFile() (string, error) {
 		},
 	})
 	if err != nil || filePath == "" {
-		return "", errors.New("选择文件出错")
+		return "", nil
 	}
 	a.filePath = filePath
 	return filePath, nil
@@ -50,11 +64,14 @@ func (a *App) SelectFile() (string, error) {
 
 func (a *App) CleanCache() {
 	a.results = []Item{}
+	a.cache = []Item{}
+	a.originData = []Item{}
 }
 
 func (a *App) CleanFile() {
 	a.filePath = ""
-	a.results = []Item{}
+	a.num = 10
+	a.CleanCache()
 }
 
 func (a *App) openFile() ([][]string, error) {
@@ -79,41 +96,109 @@ type Item struct {
 	Url  string
 }
 
-func (a *App) getResult(data [][]string) []Item {
+func (a *App) getResult() ([]Item, error) {
+	if len(a.originData) < a.num {
+		return []Item{}, errors.New("可抽奖人数不足")
+	}
 	// 设置随机种子
 	rand.Seed(time.Now().UnixNano())
-
 	// 创建一个用于存储抽奖结果的切片
 	winners := make([]Item, 0)
 	// 执行抽奖
-	for len(winners) < 10 {
+	for len(winners) < a.num {
 		// 生成一个随机索引
-		index := rand.Intn(len(data))
+		index := rand.Intn(len(a.originData))
 		// 从原始数据中取出对应索引的元素
-		winner := data[index]
-		item := Item{
-			Name: winner[0],
-			Url:  winner[1],
-		}
+		winner := a.originData[index]
+
 		// 将中奖者添加到结果中
-		winners = append(winners, item)
+		winners = append(winners, winner)
 		// 从原始数据中移除已经中奖的元素
-		data = append(data[:index], data[index+1:]...)
+		a.originData = append(a.originData[:index], a.originData[index+1:]...)
 	}
-	return winners
+	return winners, nil
 }
 
-func (a *App) Analyse() (*Result, error) {
+func (a *App) Analyse() error {
 	rows, err := a.openFile()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if len(rows) <= 1 {
-		return nil, errors.New("表格无内容或格式错误")
+		return errors.New("表格无内容或格式错误")
 	}
-	resList := a.getResult(rows[1:])
+	list := make([]Item, 0)
+	for _, item := range rows[1:] {
+		list = append(list, Item{
+			Name: item[0],
+			Url:  item[1],
+		})
+	}
+	a.originData = list
+	return nil
+}
+func (a *App) Lottery() (*Result, error) {
+	resList, err := a.getResult()
+	fmt.Println(a.originData, "111")
+	a.cache = append(a.cache, resList...)
+	if err != nil {
+		return &Result{
+			Data: resList,
+		}, err
+	}
 	a.results = resList
 	return &Result{
 		Data: resList,
 	}, nil
+}
+
+func (a *App) SaveAs() error {
+	str, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultFilename: "中奖名单.xlsx",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "excel Files (*.XLSX, *.xlsx)",
+				Pattern:     "*.XLSX;*.xlsx",
+			},
+		},
+	})
+	if str == "" || err != nil {
+		return errors.New("保存文件出错")
+	}
+	err = a.export(str)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *App) export(filename string) error {
+	file := excelize.NewFile()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+	streamWriter, err := file.NewStreamWriter("Sheet1")
+	if err != nil {
+		return err
+	}
+	var names [][]interface{}
+	names = append(names, []interface{}{"推特名称", "地址"})
+	for _, item := range a.cache {
+		names = append(names, []interface{}{item.Name, item.Url})
+	}
+	for index, item := range names {
+		cell, _ := excelize.CoordinatesToCellName(1, index+1)
+		if err := streamWriter.SetRow(cell, item); err != nil {
+			continue
+		}
+	}
+	if err := streamWriter.Flush(); err != nil {
+		return err
+	}
+	if err := file.SaveAs(filename); err != nil {
+		return err
+	}
+	return nil
 }
