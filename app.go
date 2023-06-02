@@ -23,6 +23,11 @@ type App struct {
 	cache      []Item
 	originData []Item
 	num        int
+	total      int
+}
+
+func (a *App) GetTotal() int {
+	return a.total
 }
 
 func (a *App) GetNum() int {
@@ -70,7 +75,7 @@ func (a *App) CleanCache() {
 
 func (a *App) CleanFile() {
 	a.filePath = ""
-	a.num = 10
+	a.total = 10
 	a.CleanCache()
 }
 
@@ -101,7 +106,7 @@ func (a *App) getResult() ([]Item, error) {
 		return []Item{}, errors.New("可抽奖人数不足")
 	}
 	// 设置随机种子
-	rand.Seed(time.Now().UnixNano())
+	rand.NewSource(time.Now().UnixNano())
 	// 创建一个用于存储抽奖结果的切片
 	winners := make([]Item, 0)
 	// 执行抽奖
@@ -135,11 +140,11 @@ func (a *App) Analyse() error {
 		})
 	}
 	a.originData = list
+	a.total = len(list)
 	return nil
 }
 func (a *App) Lottery() (*Result, error) {
 	resList, err := a.getResult()
-	fmt.Println(a.originData, "111")
 	a.cache = append(a.cache, resList...)
 	if err != nil {
 		return &Result{

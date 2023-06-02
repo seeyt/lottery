@@ -4,24 +4,29 @@
         <div class="header" ref="header">
             <el-form>
             <div style="display: flex;">
-                <el-form-item label="抽奖名单" style="flex: 1;margin-left: 10rpx;">
-                    <div class="file">
-                        <div class="file-path"  @click="selectFile">
-                            <div class="file-name">{{ filePath || "点击选择抽奖名单" }}</div>
-                        </div>
-                    </div>
-                </el-form-item>
                 <el-form-item label="抽取人数" label-width="80px" >
                     <el-input-number  placeholder="抽奖人数" 
-                    @change="numberChange"
-                    :min="1" :controls="false" size="small" v-model="num" style="width: 100px; margin-left: 10rpx;"></el-input-number> 
+                    @blur="numberChange"
+                    :min="1" :controls="false" size="small" v-model="num" style="width: 100px;"></el-input-number>
+                </el-form-item>
+                <el-form-item label="总人数" label-width="80px" v-if="total">
+                    {{total}}
+                </el-form-item>
+                <el-form-item  label-width="20px" v-if="filePath">
+                    <el-button @click="clean" type="primary" >重置抽奖</el-button>
+                </el-form-item>
+                <el-form-item label-width="80px" label="抽奖名单" style="flex: 1;" v-if="!filePath">
+                    <div class="file">
+                        <div class="file-path"  @click="selectFile">
+                            <div class="file-name">{{ "点击选择抽奖名单" }}</div>
+                        </div>
+                    </div>
                 </el-form-item>
             </div>
         </el-form>
             <div class="buttons">
-                <el-button @click="lottery" type="primary"  v-if="filePath">{{tableData.length === 0 ? "抽取" : "重新抽取"}}</el-button>
-                <el-button @click="clean"  v-if="filePath">清空</el-button>
-                <el-button @click="save">导出获奖名单</el-button>
+                <el-button @click="lottery" type="primary"  v-if="filePath">{{tableData.length === 0 ? "抽取" : "再次抽取"}}</el-button>
+                <el-button @click="save" v-if="filePath">导出获奖名单</el-button>
             </div>
         </div>
         <div class="table" :style="`height: ${tableHeight}px`">
@@ -43,7 +48,7 @@
     </div>
 </template>
 <script setup>
-import {Analyse, CleanFile, SelectFile, CleanCache, Lottery, GetNum, SetNum, SaveAs} from "../wailsjs/go/main/App";
+import {Analyse, CleanFile, SelectFile, Lottery, GetNum, SetNum, SaveAs, GetTotal} from "../wailsjs/go/main/App";
 import _ from 'lodash'
 import {computed, onMounted, ref} from "vue";
 import {ElLoading, ElMessage} from 'element-plus'
@@ -55,6 +60,7 @@ let tableHeight = ref(0);
 let page = ref(1);
 let size = ref(10);
 let num = ref(0);
+let total = ref(0);
 let tableData = ref([]);
 
 onMounted(async () => {
@@ -77,8 +83,8 @@ const computeHeight = () => {
 const selectFile = async  () => {
     try {
         filePath.value = await SelectFile()
-        await cleanCache()
-        analyse()
+        await analyse()
+        total.value = await GetTotal()
     } catch (e) {
         ElMessage.error(e)
     }
@@ -105,6 +111,7 @@ const analyse = async  () => {
 
 const numberChange = async () => {
     try {
+        if (num.value === null) num.value = 1;
         await SetNum(num.value)
     } catch (e) {
         ElMessage.error(e)
@@ -127,20 +134,13 @@ const lottery = async () => {
     }
 }
 
-
-
-const cleanCache = async() => {
-    await CleanCache()
-    tableData.value = []
-    page.value = 1
-    size.value = 10
-}
 const clean = async() => {
     await CleanFile()
     filePath.value = ""
     tableData.value = []
     page.value = 1
     size.value = 10
+    total.value = 0
 }
 </script>
 
@@ -167,12 +167,6 @@ const clean = async() => {
     display: flex;
     align-items: center;
     flex: 1;
-}
-.file .label {
-    margin-right: 10px;
-    display: flex;
-    align-items: center;
-    font-size: 20px;
 }
 .file .file-path {
     -webkit-appearance: none;

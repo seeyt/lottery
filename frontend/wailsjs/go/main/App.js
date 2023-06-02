@@ -18,6 +18,10 @@ export function GetNum() {
   return window['go']['main']['App']['GetNum']();
 }
 
+export function GetTotal() {
+  return window['go']['main']['App']['GetTotal']();
+}
+
 export function Lottery() {
   return window['go']['main']['App']['Lottery']();
 }
